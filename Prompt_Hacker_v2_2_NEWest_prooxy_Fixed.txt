@@ -2725,45 +2725,38 @@ end)
 
 -- вот тут находится конец 1 блока (части 7.2)
 -- ==========================================
--- ТУМБЛЕР 1: Через касания (firetouchinterest)
+-- ТУМБЛЕР 4: Модификация своего оружия (Tool Exploit)
 -- ==========================================
-createToggle(mainPage, "1️⃣ Килл-Аура [Метод: Касания/Ловушки]", function(Value)
-    local killAura1Enabled = Value
-    if not killAura1Enabled then return end
+createToggle(mainPage, "1️⃣ Килл-Аура [Метод: Раздувание оружия]", function(Value)
+    local toolAuraEnabled = Value
+    if not toolAuraEnabled then return end
 
     task.spawn(function()
-        while killAura1Enabled and not _G.ScriptDestroyed do
+        while toolAuraEnabled and not _G.ScriptDestroyed do
             if not _G.ScriptPaused then
-                local myChar = Player.Character
-                local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
-                
-                if myRoot then
-                    for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr ~= Player and plr.Character then
-                            local tHrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                            local tHum = plr.Character:FindFirstChildOfClass("Humanoid")
-                            
-                            if tHrp and tHum and tHum.Health > 0 then
-                                if (myRoot.Position - tHrp.Position).Magnitude <= 35 then
-                                    for _, obj in ipairs(workspace:GetDescendants()) do
-                                        if obj:IsA("BasePart") then
-                                            local n = obj.Name:lower()
-                                            if n:find("kill") or n:find("lava") or n:find("damage") or n:find("trap") or n:find("spike") then
-                                                if (obj.Position - tHrp.Position).Magnitude < 150 then
-                                                    pcall(function()
-                                                        tHrp.CFrame = obj.CFrame + Vector3.new(0, 2, 0)
-                                                        firetouchinterest(tHrp, obj, 0)
-                                                        task.wait(0.05)
-                                                        firetouchinterest(tHrp, obj, 1)
-                                                    end)
-                                                    break
-                                                end
-                                            end
-                                        end
-                                    end
+                local char = Player.Character
+                if char then
+                    -- Ищем экипированное оружие
+                    local tool = char:FindFirstChildOfClass("Tool")
+                    if tool then
+                        -- Ищем все части оружия (обычно это Handle)
+                        for _, part in ipairs(tool:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                -- Раздуваем хитбокс оружия
+                                if part.Name == "Handle" or part.Name:find("Hitbox") or part.Name:find("Blade") then
+                                    part.Size = Vector3.new(35, 35, 35)
+                                    part.Transparency = 0.5
+                                    part.CanCollide = false
+                                    part.Material = Enum.Material.Neon
+                                    part.Color = Color3.fromRGB(255, 0, 0)
                                 end
                             end
                         end
+
+                        -- Спамим атаку (использование инструмента)
+                        pcall(function()
+                            tool:Activate()
+                        end)
                     end
                 end
             end
@@ -2771,133 +2764,6 @@ createToggle(mainPage, "1️⃣ Килл-Аура [Метод: Касания/Л
         end
     end)
 end)
-
--- ==========================================
--- ТУМБЛЕР 2: Через физику и скорость
--- ==========================================
-createToggle(mainPage, "2️⃣ Килл-Аура [Метод: Кинетический Войд]", function(Value)
-    local killAura2Enabled = Value
-    if not killAura2Enabled then return end
-
-    task.spawn(function()
-        while killAura2Enabled and not _G.ScriptDestroyed do
-            if not _G.ScriptPaused then
-                local myChar = Player.Character
-                local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
-                
-                if myRoot then
-                    for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr ~= Player and plr.Character then
-                            local tHrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                            local tHum = plr.Character:FindFirstChildOfClass("Humanoid")
-                            
-                            if tHrp and tHum and tHum.Health > 0 then
-                                if (myRoot.Position - tHrp.Position).Magnitude <= 35 then
-                                    pcall(function()
-                                        tHrp.Anchored = false
-                                        tHrp.CanCollide = false
-                                        tHum:ChangeState(Enum.HumanoidStateType.Physics)
-                                        tHrp.AssemblyLinearVelocity = Vector3.new(math.random(-100, 100), -5000, math.random(-100, 100))
-                                        tHrp.CFrame = CFrame.new(tHrp.Position.X, tHrp.Position.Y - 50, tHrp.Position.Z)
-                                    end)
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            RunService.Heartbeat:Wait()
-        end
-    end)
-end)
-
--- ==========================================
--- ТУМБЛЕР 3: Через поиск RemoteEvent (урон)
--- ==========================================
-createToggle(mainPage, "3️⃣ Килл-Аура [Метод: Спам RemoteEvent]", function(Value)
-    local killAura3Enabled = Value
-    if not killAura3Enabled then return end
-
-    task.spawn(function()
-        local damageEvents = {}
-        local rs = game:GetService("ReplicatedStorage")
-        
-        for _, obj in ipairs(rs:GetDescendants()) do
-            if obj:IsA("RemoteEvent") then
-                local n = obj.Name:lower()
-                if n:find("damage") or n:find("hit") or n:find("attack") or n:find("kill") or n:find("hurt") then
-                    table.insert(damageEvents, obj)
-                end
-            end
-        end
-
-        if #damageEvents == 0 then
-            warn("Не найдено RemoteEvent с уроном. Метод 3 может не сработать.")
-        end
-
-        while killAura3Enabled and not _G.ScriptDestroyed do
-            if not _G.ScriptPaused then
-                local myChar = Player.Character
-                local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
-                
-                if myRoot then
-                    for _, plr in ipairs(Players:GetPlayers()) do
-                        if plr ~= Player and plr.Character then
-                            local tHrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                            local tHum = plr.Character:FindFirstChildOfClass("Humanoid")
-                            
-                            if tHrp and tHum and tHum.Health > 0 then
-                                if (myRoot.Position - tHrp.Position).Magnitude <= 35 then
-                                    for _, event in ipairs(damageEvents) do
-                                        pcall(function()
-                                            event:FireServer(tHum, 100)
-                                            event:FireServer(plr.Character, 100)
-                                            event:FireServer(tHrp)
-                                        end)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            RunService.Heartbeat:Wait()
-        end
-    end)
-end)
-
-local camLockMiniBtn = nil
-local camLockTarget = nil
-
-local function findNearestEnemyToCenter()
-    local cam = workspace.CurrentCamera
-    local center = Vector2.new(cam.ViewportSize.X * 0.5, cam.ViewportSize.Y * 0.5)
-    local bestPlr = nil
-    local bestScore = math.huge
-
-    local myChar = Player.Character
-    local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= Player and plr.Character then
-            local tHrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            local tHum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if tHrp and tHum and tHum.Health > 0 then
-                local worldDist = myRoot and (myRoot.Position - tHrp.Position).Magnitude or 0
-                if worldDist <= 250 then
-                    local screenPos, onScreen = cam:WorldToViewportPoint(tHrp.Position)
-                    local screenDist = onScreen and (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude or 9999
-                    local score = (worldDist <= 20) and worldDist or (screenDist + worldDist * 0.5)
-                    if score < bestScore then
-                        bestScore = score
-                        bestPlr = plr
-                    end
-                end
-            end
-        end
-    end
-    return bestPlr
-end
 
 createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLock)", function(Value)
     camLockMiniEnabled = Value
