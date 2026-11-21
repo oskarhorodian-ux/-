@@ -2724,46 +2724,28 @@ createToggle(movePage, "📦 Увеличить хитбоксы врагов (�
 end)
 
 -- вот тут находится конец 1 блока (части 7.2)
--- ==========================================
--- ТУМБЛЕР 4: Модификация своего оружия (Tool Exploit)
--- ==========================================
-createToggle(mainPage, "1️⃣ Килл-Аура [Метод: Раздувание оружия]", function(Value)
-    local toolAuraEnabled = Value
-    if not toolAuraEnabled then return end
+-- 🛡️ АНТИ-ХИТБОКС ПОДУШКА (HITBOX DEFLECTOR)
+local cushionEnabled = false
+local PhysicsService = game:GetService("PhysicsService")
 
-    task.spawn(function()
-        while toolAuraEnabled and not _G.ScriptDestroyed do
-            if not _G.ScriptPaused then
-                local char = Player.Character
-                if char then
-                    -- Ищем экипированное оружие
-                    local tool = char:FindFirstChildOfClass("Tool")
-                    if tool then
-                        -- Ищем все части оружия (обычно это Handle)
-                        for _, part in ipairs(tool:GetDescendants()) do
-                            if part:IsA("BasePart") then
-                                -- Раздуваем хитбокс оружия
-                                if part.Name == "Handle" or part.Name:find("Hitbox") or part.Name:find("Blade") then
-                                    part.Size = Vector3.new(35, 35, 35)
-                                    part.Transparency = 0.5
-                                    part.CanCollide = false
-                                    part.Material = Enum.Material.Neon
-                                    part.Color = Color3.fromRGB(255, 0, 0)
-                                end
-                            end
-                        end
-
-                        -- Спамим атаку (использование инструмента)
-                        pcall(function()
-                            tool:Activate()
-                        end)
-                    end
-                end
-            end
-            RunService.Heartbeat:Wait()
-        end
-    end)
+-- Настраиваем коллизии (чтобы подушка сталкивалась только с тобой)
+pcall(function()
+    PhysicsService:RegisterCollisionGroup("CushionGroup")
+    PhysicsService:RegisterCollisionGroup("LocalPlayerGroup")
 end)
+PhysicsService:CollisionGroupSetCollidable("CushionGroup", "LocalPlayerGroup", true)
+PhysicsService:CollisionGroupSetCollidable("CushionGroup", "Default", false)
+
+local function setPlayerCollisionGroup(char)
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CollisionGroup = "LocalPlayerGroup"
+        end
+    end
+end
+
+Player.CharacterAdded:Connect(setPlayerCollisionGroup)
+if Player.Character then setPlayerCollisionGroup(Player.Character) end
 
 createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLock)", function(Value)
     camLockMiniEnabled = Value
@@ -3172,6 +3154,125 @@ createToggle(visualsPage, "🔮 Скрытые хитбоксы (Ураган, �
             task.wait(1)
         end
         if descConn then descConn:Disconnect() end
+    end)
+end)
+-- 🛡️ АНТИ-ХИТБОКС ПОДУШКА (HITBOX DEFLECTOR)
+local cushionEnabled = false
+local PhysicsService = game:GetService("PhysicsService")
+
+-- Настраиваем коллизии (чтобы подушка сталкивалась только с тобой)
+pcall(function()
+    PhysicsService:RegisterCollisionGroup("CushionGroup")
+    PhysicsService:RegisterCollisionGroup("LocalPlayerGroup")
+end)
+PhysicsService:CollisionGroupSetCollidable("CushionGroup", "LocalPlayerGroup", true)
+PhysicsService:CollisionGroupSetCollidable("CushionGroup", "Default", false)
+
+local function setPlayerCollisionGroup(char)
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CollisionGroup = "LocalPlayerGroup"
+        end
+    end
+end
+
+Player.CharacterAdded:Connect(setPlayerCollisionGroup)
+if Player.Character then setPlayerCollisionGroup(Player.Character) end
+
+createToggle(visualsPage, "🛡 Анти-Хитбокс Подушка (Отталкивание от урона)", function(Value)
+    cushionEnabled = Value
+    
+    -- Очистка при выключении
+    if not cushionEnabled then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj.Name == "Cushion_Shield" then
+                obj:Destroy()
+            end
+            if obj.Name == "Cushion_Shield_Visual" then
+                obj:Destroy()
+            end
+        end
+        return 
+    end
+
+    -- Функция поиска хитбоксов (та же, что в ESP)
+    local function isHitbox(obj)
+        if not obj:IsA("BasePart") then return false end
+        if obj.Name == "Cushion_Shield" then return false end
+        if Player.Character and obj:IsDescendantOf(Player.Character) then return false end
+        
+        local n = obj.Name:lower()
+        return n:find("hitbox") or n:find("damage") or n:find("dmg") or n:find("hurt") or 
+               n:find("zone") or n:find("trap") or n:find("kill") or n:find("lava")
+    end
+
+    local function createCushion(part)
+        if part:FindFirstChild("Cushion_Shield_Visual") then return end
+        
+        local cushion = Instance.new("Part")
+        cushion.Name = "Cushion_Shield"
+        cushion.Size = part.Size + Vector3.new(2, 2, 2) -- Чуть больше самого хитбокса
+        cushion.CFrame = part.CFrame
+        cushion.Transparency = 0.85 -- Полупрозрачный купол (видно только тебе)
+        cushion.Color = Color3.fromRGB(0, 255, 255) -- Голубой цвет
+        cushion.Material = Enum.Material.ForceField
+        cushion.Anchored = part.Anchored
+        cushion.CanCollide = true
+        cushion.CollisionGroup = "CushionGroup"
+        
+        -- Привязываем купол к хитбоксу (если хитбокс движется, купол летит с ним)
+        if not part.Anchored then
+            local weld = Instance.new("WeldConstraint")
+            weld.Part0 = cushion
+            weld.Part1 = part
+            weld.Parent = cushion
+        end
+        
+        cushion.Parent = workspace
+        
+        local tag = Instance.new("BoolValue", part)
+        tag.Name = "Cushion_Shield_Visual"
+        
+        -- ЛОГИКА ОТТАЛКИВАНИЯ (Пружина)
+        cushion.Touched:Connect(function(hit)
+            local hitChar = hit.Parent
+            if hitChar == Player.Character then
+                local hrp = hitChar:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    -- Вычисляем вектор отталкивания
+                    local dir = (hrp.Position - cushion.Position).Unit
+                    local bodyVel = Instance.new("BodyVelocity")
+                    bodyVel.MaxForce = Vector3.new(100000, 0, 100000)
+                    bodyVel.Velocity = dir * 150 -- Сила отскока
+                    bodyVel.Parent = hrp
+                    task.delay(0.25, function() if bodyVel then bodyVel:Destroy() end end)
+                end
+            end
+        end)
+        
+        -- Цикл обновления (если хитбокс меняет размер или позицию)
+        task.spawn(function()
+            while cushionEnabled and cushion.Parent and part.Parent do
+                cushion.Size = part.Size + Vector3.new(2, 2, 2)
+                if part.Anchored then
+                    cushion.CFrame = part.CFrame
+                end
+                RunService.Heartbeat:Wait()
+            end
+            if cushion then cushion:Destroy() end
+        end)
+    end
+
+    -- 1. Сканируем то, что уже есть на карте
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if isHitbox(obj) then createCushion(obj) end
+    end
+
+    -- 2. Следим за новыми хитбоксами (пули, зоны боссов и т.д.)
+    workspace.DescendantAdded:Connect(function(obj)
+        if cushionEnabled and isHitbox(obj) then
+            createCushion(obj)
+        end
     end)
 end)
 
@@ -3666,7 +3767,7 @@ createToggle(visualsPage, "💎 Подсветка предметов и лут�
         "supplies", "resource", "crystal", "diamond", "scrap", "material", "artifact", "relic", "bonus",
         "powerup", "power up", "dollar", "stash", "cache", "valuable", "jewel", "ruby", "emerald",
         "sapphire", "bandage", "bullet", "armor", "battery", "fuel", "blueprint", "weapon", "pistol",
-        "rifle", "shotgun", "grenade", "loot", "booster", "upgrade", "orbs", "shard", "fragment"
+        "rifle", "shotgun", "grenade", "loot", "booster", "upgrade", "orbs", "shard", "fragment", "soul", "medkit",
     }
     local exactWords = {
         key = true, keys = true, orb = true, star = true, egg = true, bag = true, ore = true,
