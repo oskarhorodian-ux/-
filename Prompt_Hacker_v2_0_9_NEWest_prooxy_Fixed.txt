@@ -2724,35 +2724,137 @@ createToggle(movePage, "📦 Увеличить хитбоксы врагов (�
 end)
 
 -- вот тут находится конец 1 блока (части 7.2)
-createToggle(mainPage, "🚀 Килл-Аура (Телепорт в Войд -20)", function(Value)
-    killAuraEnabled = Value
-    if not killAuraEnabled then return end
+-- ==========================================
+-- ТУМБЛЕР 1: Через касания (firetouchinterest)
+-- ==========================================
+createToggle(mainPage, "1️⃣ Килл-Аура [Метод: Касания/Ловушки]", function(Value)
+    local killAura1Enabled = Value
+    if not killAura1Enabled then return end
 
     task.spawn(function()
-        while killAuraEnabled and not _G.ScriptDestroyed do
+        while killAura1Enabled and not _G.ScriptDestroyed do
             if not _G.ScriptPaused then
                 local myChar = Player.Character
                 local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
+                
                 if myRoot then
                     for _, plr in ipairs(Players:GetPlayers()) do
                         if plr ~= Player and plr.Character then
                             local tHrp = plr.Character:FindFirstChild("HumanoidRootPart")
                             local tHum = plr.Character:FindFirstChildOfClass("Humanoid")
+                            
                             if tHrp and tHum and tHum.Health > 0 then
-                                local dist = (myRoot.Position - tHrp.Position).Magnitude
-                                if dist <= 35 then
-                                    tHrp.Anchored = false
-                                    tHrp.CanCollide = false
-                                    
-                                    -- Берем текущую высоту войда (-65) и отнимаем 20
-                                    local voidY = -65 
-                                    local targetY = voidY - 20 
-                                    
-                                    -- Телепорт на полученную координату (-85)
-                                    tHrp.CFrame = CFrame.new(tHrp.Position.X, targetY, tHrp.Position.Z)
-                                    
-                                    tHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                                    tHrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                                if (myRoot.Position - tHrp.Position).Magnitude <= 35 then
+                                    for _, obj in ipairs(workspace:GetDescendants()) do
+                                        if obj:IsA("BasePart") then
+                                            local n = obj.Name:lower()
+                                            if n:find("kill") or n:find("lava") or n:find("damage") or n:find("trap") or n:find("spike") then
+                                                if (obj.Position - tHrp.Position).Magnitude < 150 then
+                                                    pcall(function()
+                                                        tHrp.CFrame = obj.CFrame + Vector3.new(0, 2, 0)
+                                                        firetouchinterest(tHrp, obj, 0)
+                                                        task.wait(0.05)
+                                                        firetouchinterest(tHrp, obj, 1)
+                                                    end)
+                                                    break
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+end)
+
+-- ==========================================
+-- ТУМБЛЕР 2: Через физику и скорость
+-- ==========================================
+createToggle(mainPage, "2️⃣ Килл-Аура [Метод: Кинетический Войд]", function(Value)
+    local killAura2Enabled = Value
+    if not killAura2Enabled then return end
+
+    task.spawn(function()
+        while killAura2Enabled and not _G.ScriptDestroyed do
+            if not _G.ScriptPaused then
+                local myChar = Player.Character
+                local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
+                
+                if myRoot then
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr ~= Player and plr.Character then
+                            local tHrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                            local tHum = plr.Character:FindFirstChildOfClass("Humanoid")
+                            
+                            if tHrp and tHum and tHum.Health > 0 then
+                                if (myRoot.Position - tHrp.Position).Magnitude <= 35 then
+                                    pcall(function()
+                                        tHrp.Anchored = false
+                                        tHrp.CanCollide = false
+                                        tHum:ChangeState(Enum.HumanoidStateType.Physics)
+                                        tHrp.AssemblyLinearVelocity = Vector3.new(math.random(-100, 100), -5000, math.random(-100, 100))
+                                        tHrp.CFrame = CFrame.new(tHrp.Position.X, tHrp.Position.Y - 50, tHrp.Position.Z)
+                                    end)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+end)
+
+-- ==========================================
+-- ТУМБЛЕР 3: Через поиск RemoteEvent (урон)
+-- ==========================================
+createToggle(mainPage, "3️⃣ Килл-Аура [Метод: Спам RemoteEvent]", function(Value)
+    local killAura3Enabled = Value
+    if not killAura3Enabled then return end
+
+    task.spawn(function()
+        local damageEvents = {}
+        local rs = game:GetService("ReplicatedStorage")
+        
+        for _, obj in ipairs(rs:GetDescendants()) do
+            if obj:IsA("RemoteEvent") then
+                local n = obj.Name:lower()
+                if n:find("damage") or n:find("hit") or n:find("attack") or n:find("kill") or n:find("hurt") then
+                    table.insert(damageEvents, obj)
+                end
+            end
+        end
+
+        if #damageEvents == 0 then
+            warn("Не найдено RemoteEvent с уроном. Метод 3 может не сработать.")
+        end
+
+        while killAura3Enabled and not _G.ScriptDestroyed do
+            if not _G.ScriptPaused then
+                local myChar = Player.Character
+                local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
+                
+                if myRoot then
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr ~= Player and plr.Character then
+                            local tHrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                            local tHum = plr.Character:FindFirstChildOfClass("Humanoid")
+                            
+                            if tHrp and tHum and tHum.Health > 0 then
+                                if (myRoot.Position - tHrp.Position).Magnitude <= 35 then
+                                    for _, event in ipairs(damageEvents) do
+                                        pcall(function()
+                                            event:FireServer(tHum, 100)
+                                            event:FireServer(plr.Character, 100)
+                                            event:FireServer(tHrp)
+                                        end)
+                                    end
                                 end
                             end
                         end
