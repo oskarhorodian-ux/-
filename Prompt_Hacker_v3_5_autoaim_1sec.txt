@@ -2887,6 +2887,19 @@ local function findNearestEnemyByDistance()
     return bestPlayer
 end
 
+-- =========================================================
+-- ----- НАЧАЛО ЧИСТОГО АИМБОТА -----
+-- =========================================================
+
+local camLockMiniEnabled = false
+local camLockActive = false
+local camLockTarget = nil
+local camLockMiniBtn = nil
+local shiftLockMiniEnabled = false
+local spectatingPlayer = nil
+local followBehindEnabled = false
+local freecamEnabled = false
+
 createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLock)", function(Value)
     camLockMiniEnabled = Value
     camLockActive = false
@@ -2952,15 +2965,8 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
         currentTargetPlr = nil
         currentTargetPart = nil
         pcall(function() RunService:UnbindFromRenderStep("PromptCamLockStep") end)
-        
         local cam = workspace.CurrentCamera
-        if cam then 
-            cam.CameraType = Enum.CameraType.Custom 
-        end
-        -- Возвращаем шифтлок, если он был включен
-        if shiftLockMiniEnabled then
-            Player.CameraMode = Enum.CameraMode.LockShoulder
-        end
+        if cam then cam.CameraType = Enum.CameraType.Custom end
         btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
         btn.Text = "🎯"
     end
@@ -2968,10 +2974,9 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     local function startCamLock()
         camLockActive = true
         btn.BackgroundColor3 = Color3.fromRGB(45, 175, 55)
-        btn.Text = "🎯"
+        btn.Text = "🔒"
 
-        -- МОЩНЫЙ ФИКС: Отключаем шифтлок на уровне движка
-        Player.CameraMode = Enum.CameraMode.Classic 
+        Player.CameraMode = Enum.CameraMode.Classic
         if shiftLockMiniEnabled then
             shiftLockMiniEnabled = false
             if _G.PH_Toggles and _G.PH_Toggles["🔒 Шифтлок (Shift Lock)"] then
@@ -2982,13 +2987,13 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
         spectatingPlayer = nil
         followBehindEnabled = false
 
+        local cam = workspace.CurrentCamera
+        if cam then cam.CameraType = Enum.CameraType.Custom end
+
         RunService:BindToRenderStep("PromptCamLockStep", Enum.RenderPriority.Camera.Value + 1, function()
             if not camLockActive or _G.ScriptDestroyed or _G.ScriptPaused then return end
-            
             local cam = workspace.CurrentCamera
             if not cam then return end
-            
-            -- Жестко перебиваем камеру
             cam.CameraType = Enum.CameraType.Scriptable
 
             if currentTargetPlr then
@@ -3013,9 +3018,8 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
 
             if currentTargetPart and currentTargetPart.Parent then
                 camLockTarget = currentTargetPlr
-                -- Плавный, но четкий доворот
                 local targetCF = CFrame.lookAt(cam.CFrame.Position, currentTargetPart.Position)
-                cam.CFrame = cam.CFrame:Lerp(targetCF, 0.35) 
+                cam.CFrame = cam.CFrame:Lerp(targetCF, 0.35)
             end
         end)
     end
@@ -3038,6 +3042,10 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     end)
 end)
 
+-- =========================================================
+-- ----- КОНЕЦ ФАЙЛА (ЗАГЛУШКА) -----
+-- =========================================================
+print("PROMPT_HACKER: Скрипт успешно загружен!")
 -- =========================================================
 -- ----- КОНЕЦ ЧАСТИ 7.2 -----
 -- =========================================================
