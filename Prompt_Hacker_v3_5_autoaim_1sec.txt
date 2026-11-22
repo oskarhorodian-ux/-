@@ -2886,7 +2886,7 @@ local function findNearestEnemyByDistance()
     end
     return bestPlayer
 end
-
+do
 createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLock)", function(Value)
     camLockMiniEnabled = Value
     camLockActive = false
@@ -3037,7 +3037,7 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
         stopCamLock()
     end)
 end)
-
+end
 -- =========================================================
 -- ----- КОНЕЦ ЧАСТИ 7.2 -----
 -- =========================================================
