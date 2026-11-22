@@ -2897,7 +2897,6 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
         pcall(function() camLockMiniBtn:Destroy() end)
         camLockMiniBtn = nil
     end
-
     if not camLockMiniEnabled then return end
     if ScreenGui then ScreenGui.DisplayOrder = 999 end
 
@@ -2918,52 +2917,44 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     local stroke = Instance.new("UIStroke", btn)
     stroke.Thickness = 2
     stroke.Color = Color3.fromRGB(255, 220, 60)
-
     camLockMiniBtn = btn
 
-    -- === ЯДРО: ближайший живой игрок, без радиуса, с кэшем ===
-    local cachedTarget = nil
-    local cachedPart = nil
-    local nextRescan = 0
+    local currentTargetPlr = nil
+    local currentTargetPart = nil
 
-    local function getNearestTarget()
-        local myChar = Player.Character
-        local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
-        if not myRoot then return nil, nil end
+    local function getNearest()
+        local cam = workspace.CurrentCamera
+        if not cam then return nil, nil, math.huge end
+        
+        local camPos = cam.CFrame.Position
+        local best, bestPart, bestD = nil, nil, math.huge
 
-        local bestPlr, bestDist, bestPart = nil, math.huge, nil
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= Player and plr.Character then
                 local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-                local head = plr.Character:FindFirstChild("Head")
-                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                if hum and hum.Health > 0 and (head or hrp) then
-                    local part = head or hrp
-                    local d = (part.Position - myRoot.Position).Magnitude
-                    if d < bestDist then
-                        bestDist, bestPlr, bestPart = d, plr, part
+                local targetPart = plr.Character:FindFirstChild("Head") 
+                                or plr.Character:FindFirstChild("UpperTorso") 
+                                or plr.Character:FindFirstChild("HumanoidRootPart")
+                
+                if hum and hum.Health > 0 and targetPart then
+                    local d = (targetPart.Position - camPos).Magnitude
+                    if d < bestD then 
+                        bestD, best, bestPart = d, plr, targetPart 
                     end
                 end
             end
         end
-        return bestPlr, bestPart
-    end
-
-    -- Проверка "цель ещё валидна?"
-    local function isTargetValid(plr, part)
-        if not plr or not plr.Parent then return false end
-        if not part or not part.Parent then return false end
-        local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return false end
-        return true
+        return best, bestPart, bestD
     end
 
     local function stopCamLock()
         camLockActive = false
         camLockTarget = nil
-        cachedTarget = nil
-        cachedPart = nil
+        currentTargetPlr = nil
+        currentTargetPart = nil
         pcall(function() RunService:UnbindFromRenderStep("PromptCamLockStep") end)
+        local cam = workspace.CurrentCamera
+        if cam then cam.CameraType = Enum.CameraType.Custom end
         btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
         btn.Text = "🎯"
     end
@@ -2971,63 +2962,72 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     local function startCamLock()
         camLockActive = true
         btn.BackgroundColor3 = Color3.fromRGB(45, 175, 55)
-        btn.Text = "🎯"
+        btn.Text = "🔒"
+
+        -- Отключаем конфликты (Freecam, Spectate, Follow)
+        if freecamEnabled then freecamEnabled = false end
+        spectatingPlayer = nil
+        followBehindEnabled = false
+
+        local cam = workspace.CurrentCamera
+        if cam then cam.CameraType = Enum.CameraType.Custom end
 
         RunService:BindToRenderStep("PromptCamLockStep", Enum.RenderPriority.Camera.Value + 1, function()
             if not camLockActive or _G.ScriptDestroyed or _G.ScriptPaused then return end
-
-            -- Пересканируем не каждый кадр, а раз в ~0.25 сек (снижает нагрузку и убирает дёрганье)
-            local now = tick()
-            if now >= nextRescan or not isTargetValid(cachedTarget, cachedPart) then
-                nextRescan = now + 0.25
-                local newPlr, newPart = getNearestTarget()
-                cachedTarget = newPlr
-                cachedPart = newPart
-                camLockTarget = newPlr
-            end
-
-            if not cachedPart or not cachedPart.Parent then return end
-
+            
             local cam = workspace.CurrentCamera
             if not cam then return end
+            
+            -- ГЛАВНОЕ ИСПРАВЛЕНИЕ: перебиваем Шифтлок
+            cam.CameraType = Enum.CameraType.Custom
+            if shiftLockMiniEnabled then
+                shiftLockMiniEnabled = false -- Принудительно выключаем переменную, чтобы шифтлок не мешал
+                if _G.PH_Toggles and _G.PH_Toggles["🔒 Шифтлок (Shift Lock)"] then
+                    _G.PH_Toggles["🔒 Шифтлок (Shift Lock)"]:Set(false)
+                end
+            end
 
-            local targetPos = cachedPart.Position
-            local camPos = cam.CFrame.Position
-            local lookCFrame = CFrame.lookAt(camPos, targetPos)
+            -- Сброс если цель умерла
+            if currentTargetPlr then
+                local hum = currentTargetPlr.Character and currentTargetPlr.Character:FindFirstChildOfClass("Humanoid")
+                if not currentTargetPart or not currentTargetPart.Parent or not hum or hum.Health <= 0 then
+                    currentTargetPlr, currentTargetPart = nil, nil
+                end
+            end
 
-            -- Плавный доворот. 0.18 — мягко, без рывков.
-            cam.CFrame = cam.CFrame:Lerp(lookCFrame, 0.18)
+            local nearPlr, nearPart, nearDist = getNearest()
+            
+            if nearPlr then
+                if not currentTargetPlr then
+                    currentTargetPlr, currentTargetPart = nearPlr, nearPart
+                else
+                    local currentDist = (currentTargetPart.Position - cam.CFrame.Position).Magnitude
+                    if nearDist < currentDist - 10 then 
+                        currentTargetPlr, currentTargetPart = nearPlr, nearPart
+                    end
+                end
+            end
+
+            if currentTargetPart and currentTargetPart.Parent then
+                camLockTarget = currentTargetPlr
+                cam.CFrame = CFrame.lookAt(cam.CFrame.Position, currentTargetPart.Position)
+            end
         end)
     end
 
     local lastTap = 0
-    local function toggleCamLock()
+    local function toggle()
         if tick() - lastTap < 0.3 then return end
         lastTap = tick()
         if camLockActive then stopCamLock() else startCamLock() end
     end
 
-    btn.MouseButton1Down:Connect(toggleCamLock)
-    btn.TouchTap:Connect(toggleCamLock)
-
-    -- Авто-сброс при выходе цели (страховка)
-    Players.PlayerRemoving:Connect(function(plr)
-        if camLockTarget == plr then
-            cachedTarget = nil
-            cachedPart = nil
-            camLockTarget = nil
-        end
-    end)
+    btn.MouseButton1Down:Connect(toggle)
+    btn.TouchTap:Connect(toggle)
 
     task.spawn(function()
         while camLockMiniEnabled and not _G.ScriptDestroyed do
-            if camLockActive and not isTargetValid(cachedTarget, cachedPart) then
-                cachedTarget = nil
-                cachedPart = nil
-                camLockTarget = nil
-                nextRescan = 0
-            end
-            task.wait(0.1)
+            task.wait(0.2)
         end
         stopCamLock()
     end)
