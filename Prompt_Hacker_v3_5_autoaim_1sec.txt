@@ -2886,7 +2886,7 @@ local function findNearestEnemyByDistance()
     end
     return bestPlayer
 end
-do
+
 createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLock)", function(Value)
     camLockMiniEnabled = Value
     camLockActive = false
@@ -2968,7 +2968,7 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     local function startCamLock()
         camLockActive = true
         btn.BackgroundColor3 = Color3.fromRGB(45, 175, 55)
-        btn.Text = "🔒"
+        btn.Text = "🎯"
 
         -- МОЩНЫЙ ФИКС: Отключаем шифтлок на уровне движка
         Player.CameraMode = Enum.CameraMode.Classic 
@@ -3037,7 +3037,7 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
         stopCamLock()
     end)
 end)
-end
+
 -- =========================================================
 -- ----- КОНЕЦ ЧАСТИ 7.2 -----
 -- =========================================================
