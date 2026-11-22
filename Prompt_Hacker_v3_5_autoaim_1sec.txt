@@ -2925,7 +2925,6 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     local function getNearest()
         local cam = workspace.CurrentCamera
         if not cam then return nil, nil, math.huge end
-        
         local camPos = cam.CFrame.Position
         local best, bestPart, bestD = nil, nil, math.huge
 
@@ -2953,8 +2952,15 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
         currentTargetPlr = nil
         currentTargetPart = nil
         pcall(function() RunService:UnbindFromRenderStep("PromptCamLockStep") end)
+        
         local cam = workspace.CurrentCamera
-        if cam then cam.CameraType = Enum.CameraType.Custom end
+        if cam then 
+            cam.CameraType = Enum.CameraType.Custom 
+        end
+        -- Возвращаем шифтлок, если он был включен
+        if shiftLockMiniEnabled then
+            Player.CameraMode = Enum.CameraMode.LockShoulder
+        end
         btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
         btn.Text = "🎯"
     end
@@ -2964,13 +2970,17 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
         btn.BackgroundColor3 = Color3.fromRGB(45, 175, 55)
         btn.Text = "🔒"
 
-        -- Отключаем конфликты (Freecam, Spectate, Follow)
+        -- МОЩНЫЙ ФИКС: Отключаем шифтлок на уровне движка
+        Player.CameraMode = Enum.CameraMode.Classic 
+        if shiftLockMiniEnabled then
+            shiftLockMiniEnabled = false
+            if _G.PH_Toggles and _G.PH_Toggles["🔒 Шифтлок (Shift Lock)"] then
+                _G.PH_Toggles["🔒 Шифтлок (Shift Lock)"]:Set(false)
+            end
+        end
         if freecamEnabled then freecamEnabled = false end
         spectatingPlayer = nil
         followBehindEnabled = false
-
-        local cam = workspace.CurrentCamera
-        if cam then cam.CameraType = Enum.CameraType.Custom end
 
         RunService:BindToRenderStep("PromptCamLockStep", Enum.RenderPriority.Camera.Value + 1, function()
             if not camLockActive or _G.ScriptDestroyed or _G.ScriptPaused then return end
@@ -2978,16 +2988,9 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
             local cam = workspace.CurrentCamera
             if not cam then return end
             
-            -- ГЛАВНОЕ ИСПРАВЛЕНИЕ: перебиваем Шифтлок
-            cam.CameraType = Enum.CameraType.Custom
-            if shiftLockMiniEnabled then
-                shiftLockMiniEnabled = false -- Принудительно выключаем переменную, чтобы шифтлок не мешал
-                if _G.PH_Toggles and _G.PH_Toggles["🔒 Шифтлок (Shift Lock)"] then
-                    _G.PH_Toggles["🔒 Шифтлок (Shift Lock)"]:Set(false)
-                end
-            end
+            -- Жестко перебиваем камеру
+            cam.CameraType = Enum.CameraType.Scriptable
 
-            -- Сброс если цель умерла
             if currentTargetPlr then
                 local hum = currentTargetPlr.Character and currentTargetPlr.Character:FindFirstChildOfClass("Humanoid")
                 if not currentTargetPart or not currentTargetPart.Parent or not hum or hum.Health <= 0 then
@@ -3002,7 +3005,7 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
                     currentTargetPlr, currentTargetPart = nearPlr, nearPart
                 else
                     local currentDist = (currentTargetPart.Position - cam.CFrame.Position).Magnitude
-                    if nearDist < currentDist - 10 then 
+                    if nearDist < currentDist - 5 then 
                         currentTargetPlr, currentTargetPart = nearPlr, nearPart
                     end
                 end
@@ -3010,7 +3013,9 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
 
             if currentTargetPart and currentTargetPart.Parent then
                 camLockTarget = currentTargetPlr
-                cam.CFrame = CFrame.lookAt(cam.CFrame.Position, currentTargetPart.Position)
+                -- Плавный, но четкий доворот
+                local targetCF = CFrame.lookAt(cam.CFrame.Position, currentTargetPart.Position)
+                cam.CFrame = cam.CFrame:Lerp(targetCF, 0.35) 
             end
         end)
     end
@@ -3033,210 +3038,6 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     end)
 end)
 
--- вот тут находится конец 2 блока (части 7.2)
-local shiftLockBtn = nil
-local crosshairFrame = nil
-local shiftLockActive = false
-
-createToggle(visualsPage, "🔒 Мобильный Шифтлок с прицелом (Точный центр)", function(Value)
-    shiftLockMiniEnabled = Value
-    shiftLockActive = false
-
-    local UIS = game:GetService("UserInputService")
-    local GuiService = game:GetService("GuiService")
-    UIS.MouseBehavior = Enum.MouseBehavior.Default
-
-    if shiftLockBtn then pcall(function() shiftLockBtn:Destroy() end) shiftLockBtn = nil end
-    if crosshairFrame then pcall(function() crosshairFrame:Destroy() end) crosshairFrame = nil end
-
-    if not shiftLockMiniEnabled then return end
-    if ScreenGui then ScreenGui.DisplayOrder = 999 end
-
-    local btn = Instance.new("TextButton")
-    btn.Name = "ShiftLockMiniBtn"
-    btn.Size = UDim2.new(0, 48, 0, 48)
-    btn.Position = UDim2.new(0.84, 0, 0.51, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
-    btn.Text = "🔒"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 22
-    btn.Active = true
-    btn.Draggable = true
-    btn.ZIndex = 65
-    btn.Parent = ScreenGui
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
-
-    local stroke = Instance.new("UIStroke", btn)
-    stroke.Thickness = 2.5
-    stroke.Color = Color3.fromRGB(100, 220, 255)
-
-    shiftLockBtn = btn
-
-    local ch = Instance.new("Frame")
-    ch.Name = "PromptCrosshair"
-    ch.Size = UDim2.new(0, 26, 0, 26)
-    ch.AnchorPoint = Vector2.new(0.5, 0.5)
-    ch.BackgroundTransparency = 1
-    ch.Visible = false
-    ch.ZIndex = 75
-    ch.Parent = ScreenGui
-
-    local hLine = Instance.new("Frame", ch)
-    hLine.Size = UDim2.new(1, 0, 0, 2)
-    hLine.Position = UDim2.new(0, 0, 0.5, -1)
-    hLine.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
-    hLine.BorderSizePixel = 0
-
-    local vLine = Instance.new("Frame", ch)
-    vLine.Size = UDim2.new(0, 2, 1, 0)
-    vLine.Position = UDim2.new(0.5, -1, 0, 0)
-    vLine.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
-    vLine.BorderSizePixel = 0
-
-    local centerDot = Instance.new("Frame", ch)
-    centerDot.Size = UDim2.new(0, 4, 0, 4)
-    centerDot.AnchorPoint = Vector2.new(0.5, 0.5)
-    centerDot.Position = UDim2.new(0.5, 0, 0.5, 0)
-    centerDot.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-    centerDot.BorderSizePixel = 0
-    Instance.new("UICorner", centerDot).CornerRadius = UDim.new(1, 0)
-
-    crosshairFrame = ch
-
-    local lastTap = 0
-    local function toggleShift()
-        if tick() - lastTap < 0.25 then return end
-        lastTap = tick()
-        shiftLockActive = not shiftLockActive
-        ch.Visible = shiftLockActive
-        btn.BackgroundColor3 = shiftLockActive and Color3.fromRGB(50, 180, 70) or Color3.fromRGB(210, 55, 45)
-        if not shiftLockActive then
-            UIS.MouseBehavior = Enum.MouseBehavior.Default
-        end
-    end
-
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            toggleShift()
-        end
-    end)
-
-    task.spawn(function()
-        local cam = workspace.CurrentCamera
-        while shiftLockMiniEnabled and btn and btn.Parent and not _G.ScriptDestroyed do
-            local char = Player.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-            if shiftLockActive and not _G.ScriptPaused and hum and hrp then
-                local inset = GuiService:GetGuiInset()
-                local realCenterX = (cam.ViewportSize.X * 0.5) - inset.X
-                local realCenterY = (cam.ViewportSize.Y * 0.5) - inset.Y
-                ch.Position = UDim2.new(0, realCenterX, 0, realCenterY)
-
-                UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
-                hum.AutoRotate = false
-                hum.CameraOffset = Vector3.new(1.75, 0.35, 0)
-
-                local look = cam.CFrame.LookVector
-                local flatLook = Vector3.new(look.X, 0, look.Z)
-                if flatLook.Magnitude > 0.01 then
-                    hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + flatLook.Unit)
-                end
-                if phantomRunning and ghostSimulationCube then
-                    ghostSimulationCube.CFrame = CFrame.new(ghostSimulationCube.Position, ghostSimulationCube.Position + flatLook.Unit)
-                end
-            elseif hum then
-                UIS.MouseBehavior = Enum.MouseBehavior.Default
-                hum.AutoRotate = true
-                hum.CameraOffset = Vector3.new(0, 0, 0)
-            end
-            RunService.RenderStepped:Wait()
-        end
-
-        UIS.MouseBehavior = Enum.MouseBehavior.Default
-        local char = Player.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.AutoRotate = true
-            hum.CameraOffset = Vector3.new(0, 0, 0)
-        end
-    end)
-end)
-
--- ШИФТЛОК: пока он включён, "мышь" для игры = центр экрана (как заблокированная мышь на ПК)
--- Работает через hookmetamethod; без него шифтлок просто остаётся камерой/поворотом как раньше.
-task.spawn(function()
-    repeat task.wait(0.5) until shiftLockActive or _G.ScriptDestroyed
-    if _G.ScriptDestroyed then return end
-    if not (hookmetamethod and checkcaller and getnamecallmethod) then
-        warn("[Шифтлок] Экзекутор не поддерживает hookmetamethod: выстрелы в центр недоступны")
-        return
-    end
-
-    local GuiService = game:GetService("GuiService")
-    local UIS = game:GetService("UserInputService")
-    local mouse = Player:GetMouse()
-    local wrap = newcclosure or function(f) return f end
-
-    local function centerPoint()
-        local vs = workspace.CurrentCamera.ViewportSize
-        return Vector2.new(vs.X * 0.5, vs.Y * 0.5)
-    end
-
-    local function centerRay()
-        local c = centerPoint()
-        return workspace.CurrentCamera:ViewportPointToRay(c.X, c.Y)
-    end
-
-    local function centerRaycast()
-        local ray = centerRay()
-        local params = RaycastParams.new()
-        params.FilterType = Enum.RaycastFilterType.Exclude
-        local ignore = {}
-        if Player.Character then table.insert(ignore, Player.Character) end
-        if ghostVisualClone then table.insert(ignore, ghostVisualClone) end
-        if ghostSimulationCube then table.insert(ignore, ghostSimulationCube) end
-        params.FilterDescendantsInstances = ignore
-        local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
-        return ray, result
-    end
-
-    local function redirectActive()
-        return shiftLockActive and not _G.ScriptPaused and not _G.ScriptDestroyed
-    end
-
-    local oldIndex
-    oldIndex = hookmetamethod(game, "__index", wrap(function(self, key)
-        if self == mouse and not checkcaller() and redirectActive() then
-            if key == "Hit" then
-                local ray, result = centerRaycast()
-                return CFrame.new(result and result.Position or (ray.Origin + ray.Direction * 1000))
-            elseif key == "Target" then
-                local _, result = centerRaycast()
-                return result and result.Instance or nil
-            elseif key == "X" then
-                return centerPoint().X - GuiService:GetGuiInset().X
-            elseif key == "Y" then
-                return centerPoint().Y - GuiService:GetGuiInset().Y
-            elseif key == "UnitRay" then
-                return centerRay()
-            end
-        end
-        return oldIndex(self, key)
-    end))
-
-    local oldNamecall
-    oldNamecall = hookmetamethod(game, "__namecall", wrap(function(self, ...)
-        if self == UIS and not checkcaller() and redirectActive() and getnamecallmethod() == "GetMouseLocation" then
-            return centerPoint()
-        end
-        return oldNamecall(self, ...)
-    end))
-end)
-
-end
 -- =========================================================
 -- ----- КОНЕЦ ЧАСТИ 7.2 -----
 -- =========================================================
