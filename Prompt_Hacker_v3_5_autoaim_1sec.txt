@@ -2909,80 +2909,128 @@ createToggle(mainPage, "🎯 Мини-кнопка Auto-Aim камеры (CamLoc
     btn.Text = "🎯"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Font = Enum.Font.SourceSansBold
-    btn.TextSize = 26
+    btn.TextSize = 24
     btn.Active = true
     btn.Draggable = true
-    btn.ZIndex = 65
+    btn.ZIndex = 90
     btn.Parent = ScreenGui
     Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
-
     local stroke = Instance.new("UIStroke", btn)
-    stroke.Thickness = 2.5
+    stroke.Thickness = 2
     stroke.Color = Color3.fromRGB(255, 220, 60)
 
     camLockMiniBtn = btn
 
+    -- === ЯДРО СТАРОГО АИМБОТА: ВСЕГДА БЛИЖАЙШИЙ ИГРОК, БЕЗ РАДИУСА ===
+    local function getNearestTarget()
+        local myChar = Player.Character
+        local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
+        if not myRoot then return nil end
+
+        local bestPlr, bestDist, bestPart = nil, math.huge, nil
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= Player and plr.Character then
+                local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+                local head = plr.Character:FindFirstChild("Head")
+                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+
+                if hum and hum.Health > 0 and (head or hrp) then
+                    local targetPart = head or hrp
+                    local dist = (targetPart.Position - myRoot.Position).Magnitude
+
+                    -- Никаких лимитов радиуса. Просто ближайший.
+                    if dist < bestDist then
+                        bestDist = dist
+                        bestPlr = plr
+                        bestPart = targetPart
+                    end
+                end
+            end
+        end
+
+        return bestPlr, bestPart, bestDist
+    end
+
+    local function stopCamLock()
+        camLockActive = false
+        camLockTarget = nil
+        pcall(function() RunService:UnbindFromRenderStep("PromptCamLockStep") end)
+        btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
+        btn.Text = "🎯"
+    end
+
+    local function startCamLock()
+        camLockActive = true
+        btn.BackgroundColor3 = Color3.fromRGB(45, 175, 55)
+        btn.Text = "🔒"
+
+        RunService:BindToRenderStep("PromptCamLockStep", Enum.RenderPriority.Camera.Value + 1, function()
+            if not camLockActive or _G.ScriptDestroyed or _G.ScriptPaused then return end
+
+            local targetPlr, targetPart = getNearestTarget()
+
+            -- Авто-переключение: цель вышла / умерла / респавнилась / нет чара
+            if not targetPlr or not targetPart or not targetPart.Parent then
+                camLockTarget = nil
+                return
+            end
+
+            -- Если появился другой игрок ближе — переключаемся (это делает getNearestTarget)
+            camLockTarget = targetPlr
+
+            local cam = workspace.CurrentCamera
+            if cam and targetPart then
+                local myChar = Player.Character
+                local myRoot = (phantomRunning and ghostSimulationCube) or (myChar and myChar:FindFirstChild("HumanoidRootPart"))
+                local lookAt
+                if myRoot then
+                    lookAt = CFrame.lookAt(cam.CFrame.Position, targetPart.Position)
+                else
+                    lookAt = CFrame.lookAt(cam.CFrame.Position, targetPart.Position)
+                end
+                -- Плавный доворот камеры на цель
+                cam.CFrame = cam.CFrame:Lerp(lookAt, 0.35)
+            end
+        end)
+    end
+
     local lastTap = 0
-    local nextTargetScan = 0
-    local function toggleLock()
+    local function toggleCamLock()
         if tick() - lastTap < 0.25 then return end
         lastTap = tick()
-
         if camLockActive then
-            camLockActive = false
-            camLockTarget = nil
-            btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
+            stopCamLock()
         else
-            camLockActive = true
-            nextTargetScan = 0
-            camLockTarget = findNearestEnemyByDistance()
-            btn.BackgroundColor3 = camLockTarget and Color3.fromRGB(50, 180, 70) or Color3.fromRGB(210, 55, 45)
+            startCamLock()
         end
     end
 
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            toggleLock()
+    btn.MouseButton1Down:Connect(toggleCamLock)
+    btn.TouchTap:Connect(toggleCamLock)
+
+    -- авто-переключение при смерти/выходе цели (страховка)
+    Players.PlayerRemoving:Connect(function(plr)
+        if camLockTarget == plr then
+            camLockTarget = nil
+            -- На следующем кадре getNearestTarget сам найдёт нового ближайшего
         end
     end)
 
-    RunService:BindToRenderStep("PromptCamLockStep", Enum.RenderPriority.Camera.Value + 1, function()
-        if not camLockMiniEnabled or not btn or not btn.Parent or _G.ScriptDestroyed then
-            pcall(function() RunService:UnbindFromRenderStep("PromptCamLockStep") end)
-            return
-        end
-
-        if camLockActive and not _G.ScriptPaused then
-            local now = os.clock()
-            local tChar = camLockTarget and camLockTarget.Character
-            local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
-            local tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
-
-            -- Перепроверяем ближайшую цель раз в секунду; потерянную/умершую цель заменяем сразу.
-            local targetInvalid = not camLockTarget or not camLockTarget.Parent or not tHrp or not tHum or tHum.Health <= 0
-            if targetInvalid or now >= nextTargetScan then
-                camLockTarget = findNearestEnemyByDistance()
-                nextTargetScan = now + 1
-                tChar = camLockTarget and camLockTarget.Character
-                tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
-                tHum = tChar and tChar:FindFirstChildOfClass("Humanoid")
-            end
-
-            if tHrp and tHum and tHum.Health > 0 then
-                btn.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
-                local cam = workspace.CurrentCamera
-                if cam then
-                    -- Меняем только направление взгляда: позиция и зум камеры сохраняются.
-                    local aimPosition = tHrp.Position + Vector3.new(0, 1.2, 0)
-                    local desiredCFrame = CFrame.lookAt(cam.CFrame.Position, aimPosition)
-                    cam.CFrame = cam.CFrame:Lerp(desiredCFrame, 0.18)
+    task.spawn(function()
+        while camLockMiniEnabled and not _G.ScriptDestroyed do
+            if camLockActive then
+                -- Если цель потеряна — авто-поиск нового ближайшего
+                local tPlr, tPart = getNearestTarget()
+                if not tPlr or not tPart then
+                    camLockTarget = nil
+                else
+                    camLockTarget = tPlr
                 end
-            else
-                btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
             end
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(210, 55, 45)
+            task.wait(0.2)
         end
+        stopCamLock()
     end)
 end)
 
